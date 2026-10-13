@@ -8320,6 +8320,37 @@ class ChatApp(_RootBase):
     def set_status(self, text):
         self.status_var.set(text)
 
+# ---------- 启动前目录体检 ----------
+_RISKY_DIR_NAMES = {
+    "downloads", "下载",
+    "desktop", "桌面",
+    "documents", "文档",
+    "temp", "tmp",
+    "temporary internet files", "临时文件",
+}
+
+def _warn_if_risky_data_dir():
+    """若程序数据目录（exe 所在目录）落在下载/桌面/文档等"危险目录"里，
+    提醒用户放进独立文件夹，避免 memories、logs 等数据散落一地。
+    仅提醒、不阻止；用 --data-dir 显式指定过数据目录时跳过。"""
+    try:
+        for a in sys.argv[1:]:
+            if a == "--data-dir" or a.startswith("--data-dir="):
+                return  # 用户已显式指定，说明有意识，不打扰
+        base_name = os.path.basename(os.path.normpath(BASE)).strip().lower()
+        if base_name and base_name in _RISKY_DIR_NAMES:
+            messagebox.showwarning(
+                "建议先换个文件夹再运行",
+                "本程序会把对话记录、日志等数据保存在 exe 所在目录。\n\n"
+                "你现在放在「" + os.path.basename(BASE) + "」里运行，\n"
+                "数据会散落在这个文件夹里，容易和下载/文档混在一起。\n\n"
+                "建议：新建一个专用文件夹（如 D:\\MarkTalk\\），\n"
+                "把 MarkTalk_GUI.exe 放进去再双击运行。\n\n"
+                "（也可用 --data-dir 指定数据目录，详见 README）\n\n"
+                "直接继续运行也可以，数据仍会存在当前位置。")
+    except Exception:
+        pass  # 体检失败不影响启动
+
 if __name__ == "__main__":
     explicit = any(a == "--data-dir" or a.startswith("--data-dir=") for a in sys.argv[1:])
     instance = _SingleInstance(BASE, default=not explicit)
@@ -8327,6 +8358,7 @@ if __name__ == "__main__":
         if instance.existing:
             instance.activate_existing()
             sys.exit(0)
+        _warn_if_risky_data_dir()
         if not os.path.isdir(MEM_DIR):
             os.makedirs(MEM_DIR, exist_ok=True)
         app = ChatApp()
