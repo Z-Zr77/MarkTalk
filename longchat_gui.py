@@ -8320,36 +8320,93 @@ class ChatApp(_RootBase):
     def set_status(self, text):
         self.status_var.set(text)
 
-# ---------- 启动前目录体检 ----------
-_RISKY_DIR_NAMES = {
-    "downloads", "下载",
-    "desktop", "桌面",
-    "documents", "文档",
-    "temp", "tmp",
-    "temporary internet files", "临时文件",
-}
+# ---------- 首次运行安装引导 ----------
+def _ensure_install_location():
+    """首次运行（exe 所在目录没有安装标记、也没有已生成的数据）时，
+    弹出「安装引导」：让用户选择一个专用文件夹，自动把 exe 复制过去并
+    重新启动，从此数据（memories、logs、config.json 等）不再散落一地。
 
-def _warn_if_risky_data_dir():
-    """若程序数据目录（exe 所在目录）落在下载/桌面/文档等"危险目录"里，
-    提醒用户放进独立文件夹，避免 memories、logs 等数据散落一地。
-    仅提醒、不阻止；用 --data-dir 显式指定过数据目录时跳过。"""
+    跳过条件（满足任一即不引导）：
+      1. 源码运行（非打包 exe）—— 开发者场景
+      2. 命令行显式 --data-dir —— 用户已有意识
+      3. 目录里已有 .marktalk_installed 标记、memories\\ 或 config.json —— 已安装/已用过
+
+    引导分支：
+      · 是 + 选了目录 → 复制 exe 过去、写标记、启动新 exe、退出当前进程
+      · 是 + 取消选目录 → 退出（不生成任何数据）
+      · 否 + 确认当前目录 → 写标记、照常启动（以后不再弹）
+      · 否 + 不确认 / 取消 → 退出
+    任何异常都降级为「照常启动」，不卡死用户。"""
     try:
+        if not getattr(sys, "frozen", False):
+            return  # 源码运行不引导
         for a in sys.argv[1:]:
             if a == "--data-dir" or a.startswith("--data-dir="):
-                return  # 用户已显式指定，说明有意识，不打扰
-        base_name = os.path.basename(os.path.normpath(BASE)).strip().lower()
-        if base_name and base_name in _RISKY_DIR_NAMES:
-            messagebox.showwarning(
-                "建议先换个文件夹再运行",
-                "本程序会把对话记录、日志等数据保存在 exe 所在目录。\n\n"
-                "你现在放在「" + os.path.basename(BASE) + "」里运行，\n"
-                "数据会散落在这个文件夹里，容易和下载/文档混在一起。\n\n"
-                "建议：新建一个专用文件夹（如 D:\\MarkTalk\\），\n"
-                "把 MarkTalk_GUI.exe 放进去再双击运行。\n\n"
-                "（也可用 --data-dir 指定数据目录，详见 README）\n\n"
-                "直接继续运行也可以，数据仍会存在当前位置。")
+                return  # 显式指定过数据目录
+        marker = os.path.join(BASE, ".marktalk_installed")
+        if (os.path.exists(marker)
+                or os.path.isdir(os.path.join(BASE, "memories"))
+                or os.path.exists(os.path.join(BASE, "config.json"))):
+            return  # 已安装 / 已使用过
+
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            ans = messagebox.askyesnocancel(
+                "安装 MarkTalk",
+                "MarkTalk 会把对话记录、日志等数据保存在程序所在目录。\n\n"
+                "建议为它选择一个专用文件夹，避免文件散落。\n"
+                "是否现在选择安装位置？",
+                parent=root)
+            if ans is None:
+                sys.exit(0)  # 取消：退出，不生成数据
+            if ans is True:
+                default_dir = os.path.join(os.path.expanduser("~"), "MarkTalk")
+                dest = filedialog.askdirectory(
+                    parent=root, initialdir=default_dir,
+                    title="选择 MarkTalk 安装位置")
+                if not dest:
+                    sys.exit(0)  # 关闭对话框：退出
+                src = sys.executable
+                dest_exe = os.path.join(dest, "MarkTalk_GUI.exe")
+                try:
+                    if os.path.normcase(os.path.dirname(src)) != os.path.normcase(dest):
+                        shutil.copy2(src, dest_exe)
+                    else:
+                        dest_exe = src  # 选的目录就是当前目录：直接用
+                    with open(os.path.join(dest, ".marktalk_installed"),
+                              "w", encoding="utf-8") as f:
+                        f.write("MarkTalk installed here\n")
+                    messagebox.showinfo(
+                        "安装完成",
+                        "MarkTalk 已安装到：\n" + dest + "\n\n正在启动…",
+                        parent=root)
+                    os.startfile(dest_exe)
+                    sys.exit(0)
+                except Exception as e:
+                    messagebox.showwarning(
+                        "安装失败",
+                        "自动安装失败（" + str(e) + "）。\n"
+                        "请手动把 MarkTalk_GUI.exe 移动到你想要的文件夹后再运行。\n\n"
+                        "本次仍将在当前位置继续运行。",
+                        parent=root)
+                    return  # 降级：照常运行
+            else:
+                ok = messagebox.askyesno(
+                    "在当前目录运行？",
+                    "你选择不更换位置。\n\n"
+                    "确定就在当前目录运行吗？\n"
+                    "对话记录等数据将保存在：\n" + BASE,
+                    parent=root)
+                if not ok:
+                    sys.exit(0)
+                with open(marker, "w", encoding="utf-8") as f:
+                    f.write("MarkTalk installed here\n")
+                return  # 写标记后照常启动，以后不再弹
+        finally:
+            root.destroy()
     except Exception:
-        pass  # 体检失败不影响启动
+        pass  # 引导失败不影响启动
 
 if __name__ == "__main__":
     explicit = any(a == "--data-dir" or a.startswith("--data-dir=") for a in sys.argv[1:])
@@ -8358,7 +8415,7 @@ if __name__ == "__main__":
         if instance.existing:
             instance.activate_existing()
             sys.exit(0)
-        _warn_if_risky_data_dir()
+        _ensure_install_location()
         if not os.path.isdir(MEM_DIR):
             os.makedirs(MEM_DIR, exist_ok=True)
         app = ChatApp()
