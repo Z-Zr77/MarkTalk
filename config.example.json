@@ -1,0 +1,23 @@
+{
+  "engine": "auto",
+
+  "llama": {
+    "base_url": "http://127.0.0.1:8080",
+    "models_dir": "C:\\path\\to\\llama.cpp\\models"
+  },
+
+  "freetoken": {
+    "base_url": "http://127.0.0.1:8000",
+    "models_dir": "C:\\path\\to\\freetoken\\models",
+    "ft_exe": "C:\\path\\to\\freetoken\\venv\\Scripts\\ft.exe",
+    "serve_args": ["--host", "127.0.0.1", "--port", "8000", "--moe-strategy", "offload", "--mm-encoder-weights", "host"],
+    "load_timeout": 300
+  },
+
+  "openai": {
+    "base_url": "https://api.deepseek.com",
+    "api_key": "",
+    "model": "",
+    "ctx": 0
+  }
+}

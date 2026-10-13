@@ -1,0 +1,36 @@
+# 用户数据（绝不上传）
+memories/
+api_key.dat
+control_token.dat
+
+gui_settings.json
+config.json
+# config 备份（含真实盘符路径，绝不上传）
+config.json.*
+*.bak
+*.before_fix
+
+# 构建产物
+*.exe
+dist/
+build/
+__pycache__/
+*.spec
+
+# 备份
+backup/
+
+# 运行日志（可能含错误体，绝不上传）
+logs/
+*.log
+
+# 内部文档（开发过程记录，含真实路径与历史细节，不进仓库）
+#   ★ 2026-10-10 合并整理：原来的 12 份零散文档已合并为下面这两份，其余已删
+# 开发接续文档（给 AI 看的，不发布）
+# ★ git 的行内 # 注释会污染模式，注释必须独立成行；新文档需在此追加精确文件名
+开发进度-接续.md
+#   ★ README.md 是**对外唯一文档**，故意不排除 ✓ 会随开源发布 ✓
+# 内部 diff / 归档清单（含真实路径与开发历史，不进仓库）
+*.diff
+修复-mobile打包遗漏-归档清单.txt
+

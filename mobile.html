@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MarkTalk 手机对话</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f5f7;color:#20252b;font:16px system-ui,sans-serif}
+main{max-width:760px;margin:auto;padding:16px}h1{font-size:22px;margin:4px 0 16px}
+section{background:white;border:1px solid #e1e5e9;border-radius:12px;padding:14px;margin-bottom:12px}
+select,textarea,button{font:inherit;border:1px solid #ccd3db;border-radius:8px;padding:10px}
+select,textarea{width:100%;background:white}textarea{resize:vertical;min-height:90px}
+.row{display:flex;gap:8px;margin-top:10px}button{background:#fff;cursor:pointer;min-height:44px}
+#send{background:#2f6fd0;color:white;flex:1}button:disabled{opacity:.5;cursor:default}
+#status{color:#59636f;font-size:14px;line-height:1.6}#error{color:#b42318;white-space:pre-wrap}
+#conversation{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;max-height:52vh;overflow:auto;margin:0}
+</style>
+<main>
+<h1>MarkTalk 手机对话</h1>
+<section><label for="chats">会话</label><select id="chats" aria-label="选择会话"></select>
+<div class="row"><button id="switch">切换会话</button><button id="refresh">刷新</button><button id="stop">停止生成</button></div>
+<p id="status" role="status">正在连接…</p><p id="error" role="alert"></p></section>
+<section><pre id="conversation">等待加载对话…</pre></section>
+<section><label for="message">消息</label><textarea id="message" placeholder="输入消息"></textarea>
+<div class="row"><button id="send">发送</button></div></section>
+</main>
+<script>
+const token=new URLSearchParams(location.search).get('token')||'';
+const byId=id=>document.getElementById(id);
+let polling=false,activeChat='',busy=false;
+async function api(path,body){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+  try{
+    const response=await fetch(path,{method:body===undefined?'GET':'POST',cache:'no-store',
+      headers:{'X-MarkTalk-Web-Token':token,'Content-Type':'application/json'},
+      body:body===undefined?undefined:JSON.stringify(body),signal:controller.signal});
+    const result=await response.json();
+    if(!response.ok||!result.ok)throw Error(result.error||`HTTP ${response.status}`);
+    return result;
+  }finally{clearTimeout(timer)}
+}
+async function refresh(){
+  if(polling)return;
+  polling=true;
+  try{
+    const status=await api('/status'),list=await api('/chats');
+    busy=!!status.busy;activeChat=status.chat||'';
+    const selected=byId('chats').value;
+    byId('chats').replaceChildren(...list.chats.map(name=>{const option=document.createElement('option');option.value=name;option.textContent=name;return option}));
+    byId('chats').value=list.chats.includes(selected)?selected:activeChat;
+    byId('status').textContent=`当前会话：${activeChat||'无'} · 模型：${status.model||'未选择'} · ${busy?'生成中':'空闲'} · ${status.memory_tier||''}`;
+    byId('switch').disabled=busy;
+    if(activeChat){
+      const chat=await api('/chat'),box=byId('conversation');
+      const atBottom=box.scrollHeight-box.scrollTop-box.clientHeight<40;
+      box.textContent=chat.text||'当前会话暂无消息';
+      if(atBottom)box.scrollTop=box.scrollHeight;
+    }else byId('conversation').textContent='请先在电脑端选择会话';
+    byId('error').textContent='';
+  }catch(error){byId('error').textContent=error.name==='AbortError'?'请求超时，请检查电脑端状态；发送超时不要直接重复发送。':error.message}
+  finally{polling=false}
+}
+async function action(button,path,body){
+  button.disabled=true;
+  try{await api(path,body);await refresh();return true}
+  catch(error){byId('error').textContent=error.name==='AbortError'?'请求超时，请先检查对话是否已收到消息。':error.message;return false}
+  finally{button.disabled=false}
+}
+byId('send').onclick=async()=>{const text=byId('message').value.trim();if(!text)return;
+  if(await action(byId('send'),'/send',{text})&&byId('message').value.trim()===text)byId('message').value=''};
+byId('switch').onclick=()=>action(byId('switch'),'/switch',{chat:byId('chats').value});
+byId('stop').onclick=()=>action(byId('stop'),'/stop',{});
+byId('refresh').onclick=refresh;
+refresh();setInterval(refresh,2000);
+</script>
+</html>
