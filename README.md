@@ -5,7 +5,7 @@
 
 ## 特别鸣谢
 
-感谢博主[**零度解说**](https://www.freedidi.com/)的本地 AI 部署教程，这个项目正是受其启发、为解决本地模型上下文太短的问题而诞生；也感谢 **豆包 / DeepSeek Harness（DSH）/ Codex** 这些 AI 搭档在开发与优化中的一路协助。
+感谢博主[**零度解说**](https://www.freedidi.com/)的本地 AI 部署教程，这个项目正是受其启发、为解决本地模型上下文太短的问题而诞生；也感谢 **DeepSeek Harness（DSH）/ Codex** 这些 AI 搭档在开发与优化中的一路协助。
 
 ## 一、这是什么软件
 
